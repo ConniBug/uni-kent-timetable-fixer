@@ -1,5 +1,20 @@
+const config = {
+    cacheResetTime: 100
+}
+
 const http = require('http');
-const https = require('https');
+
+function unixTime() { return Math.floor(new Date().getTime() / 1000); }
+
+const fs = require('node:fs');
+const https = require('node:https');
+
+const options = {
+    key: fs.readFileSync( 'ssl/server-key.pem'),
+    cert: fs.readFileSync('ssl/server-cert.pem'),
+    port: 7891,
+    host: "0.0.0.0"
+};
 
 const l = require('@connibug/js-logging');
 console.log("Current directory:", __dirname);
@@ -8,8 +23,46 @@ l.setupFileLogging(__dirname + "/")
 
 var url_parse = require('url').parse;
 
-const host = '10.10.10.2';
-const port = 8000;
+const host = '0.0.0.0';
+const port = 7891;
+
+let cache = [
+    {
+        url: "example.com",
+        last_refreshed: 0,
+        data: ""
+    }
+]
+
+function serveCache(url, server_res) {
+    for (let i = 0; i < cache.length; i++) {
+        if(cache[i].url === url)  {
+            let since = unixTime() - cache[i].last_refreshed;
+            if(since > config.cacheResetTime)
+                return false;
+
+            server_res.writeHead(200, {
+                'Content-Type': 'application/zip',
+                'Conlstent-Transfer-Encoding': 'Binary',
+                'Content-Length': cache[i].data.length,
+                'Content-Disposition': `attachment; filename=${server_res.file_name}`
+            });
+            server_res.end(cache[i].data);
+
+            l.log(`Served ${url} from cache, cache for this url will reset in ${config.cacheResetTime - since} seconds`)
+            return true;
+        }
+    }
+    return false;
+}
+function cache_save(url, data) {
+    cache.push({
+        url: url,
+        last_refreshed: unixTime(),
+
+        data: data
+    });
+}
 
 const requestListener = function (req, res) {
     // let tmp_url = `${Math.floor(Math.random() * 900) + 100}`;
@@ -22,6 +75,7 @@ const requestListener = function (req, res) {
             res.end("This is a kent ical link please use the kent_id param instead of custom_url");
             return;
         }
+
         server_res.file_name = `custom_url_${Math.floor(Math.random() * 900) + 100}.ics`;
         server_res.is_kent = true;
         handle(req, res, url);
@@ -43,11 +97,16 @@ const requestListener = function (req, res) {
         res.end();
         return;
     }
+
     l.warning("Found no valid params");
     l.log(`Query: ${req.url}`);
 };
 
 function handle(server_req, server_res, url) {
+    if(serveCache(url, server_res)) {
+        return;
+    }
+
     l.debug(`Downloading file: ${url}`);
 
     let handler = url.startsWith("https://") ? https : http;
@@ -60,8 +119,8 @@ function handle(server_req, server_res, url) {
             res.setEncoding('binary');
 
             let chunks = [];
-
             let chunk_cnt = 0;
+
             res.on('data', (chunk) => {
                 l.verbose(`Chunk ${chunk_cnt}`);
 
@@ -69,8 +128,7 @@ function handle(server_req, server_res, url) {
                     const pattern = /ORGANIZER;CN=University of Kent/;
                     const replacement = 'ORGANIZER;CN=University of Kent:filler@example.com';
 
-                    chunk = chunk.toString()
-                        .replace(pattern, replacement);
+                    chunk = chunk.toString().replace(pattern, replacement);
                 }
 
                 chunks.push({
@@ -101,6 +159,8 @@ function handle(server_req, server_res, url) {
                 });
                 server_res.end(data);
 
+                cache_save(url, data);
+
                 l.log("Finished building, now sending to client...");
                 return data;
             });
@@ -114,7 +174,9 @@ function handle(server_req, server_res, url) {
     }
 }
 
-const server = http.createServer(requestListener);
-server.listen(port, host, () => {
-    l.log(`Server is running on http://${host}:${port}`);
-});
+https.createServer(options, (req, res) => {
+    requestListener(req, res);
+}).listen(options.port);
+
+l.log(`Server is running on https://${options.host}:${options.port}`);
+l.log(`Server is running on https://kent-fix.transgirl.space/`);
