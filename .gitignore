@@ -1,3 +1,6 @@
+ssl
+*.pem
+
 # Logs
 logs
 *.log

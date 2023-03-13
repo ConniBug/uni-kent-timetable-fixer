@@ -5,7 +5,10 @@
   "main": "index.js",
   "scripts": {
     "run" : "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "publish-multi": "docker buildx build --platform linux/amd64,linux/arm64 .",
+    "publish-arm": "docker buildx build --platform linux/arm64 .",
+    "publish-amd": "docker buildx build --platform linux/amd64 ."
   },
   "author": "",
   "license": "ISC",
