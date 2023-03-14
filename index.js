@@ -42,7 +42,7 @@ function serveCache(url, server_res) {
                 return false;
 
             server_res.writeHead(200, {
-                'Content-Type': 'application/zip',
+                'Content-Type': 'text/calendar',
                 'Conlstent-Transfer-Encoding': 'Binary',
                 'Content-Length': cache[i].data.length,
                 'Content-Disposition': `attachment; filename=${server_res.file_name}`
@@ -125,7 +125,7 @@ function handle(server_req, server_res, url) {
                 l.verbose(`Chunk ${chunk_cnt}`);
 
                 if (server_res.is_kent) {
-                    const pattern = /ORGANIZER;CN=University of Kent/;
+                    const pattern = /ORGANIZER;CN=University of Kent/mg;
                     const replacement = 'ORGANIZER;CN=University of Kent:filler@example.com';
 
                     chunk = chunk.toString().replace(pattern, replacement);
@@ -152,7 +152,7 @@ function handle(server_req, server_res, url) {
                         });
                 }
                 server_res.writeHead(200, {
-                    'Content-Type': 'application/zip',
+                    'Content-Type': 'text/calendar',
                     'Conlstent-Transfer-Encoding': 'Binary',
                     'Content-Length': data.length,
                     'Content-Disposition': `attachment; filename=${server_res.file_name}`
